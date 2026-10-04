@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Reset Data Lokal - Display Masjid</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: #06281a; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+    .box { width: 100%; max-width: 640px; background: #0f5132; border: 1px solid #d4af37; border-radius: 14px; padding: 28px; }
+    h1 { margin: 0 0 14px 0; color: #d4af37; font-size: 26px; }
+    p { line-height: 1.7; font-size: 17px; margin: 0 0 12px 0; }
+    .warn { color: #ffd98a; }
+    button { background: #d4af37; color: #0b3d2a; border: 0; padding: 16px 26px; font-size: 18px; font-weight: bold; border-radius: 10px; cursor: pointer; margin: 8px 10px 0 0; }
+    button.abu { background: #cfd8d3; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #hasil { margin-top: 18px; font-size: 18px; font-weight: bold; min-height: 24px; }
+    .ok { color: #7CFFB2; }
+    .gagal { color: #ff8a8a; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>RESET DATA LOKAL</h1>
+    <p>Tindakan ini menghapus data yang tersimpan di TV ini: jadwal, khutbah, pengumuman, pengaturan, cache halaman, dan Service Worker.</p>
+    <p>Setelah itu Display dibuka lagi dan mengambil data terbaru dari server. Data di Google Sheet <b>tidak</b> terhapus.</p>
+    <p class="warn" id="peringatan">TV harus terhubung ke internet agar Display bisa dimuat ulang setelah reset.</p>
+    <button id="ya" onclick="reset()">YA, HAPUS DATA LOKAL</button>
+    <button class="abu" id="batal" onclick="batal()">BATAL</button>
+    <div id="hasil"></div>
+  </div>
+
+  <script>
+    var TUJUAN = 'index.html';
+
+    function el(id) { return document.getElementById(id); }
+
+    function perbaruiOnline() {
+      var online = navigator.onLine !== false;
+      el('ya').disabled = !online;
+      el('peringatan').textContent = online
+        ? 'TV terhubung ke internet. Reset aman dijalankan.'
+        : 'TV sedang OFFLINE. Reset ditolak agar Display tetap bisa dibuka. Sambungkan internet dulu.';
+    }
+
+    window.addEventListener('online', perbaruiOnline);
+    window.addEventListener('offline', perbaruiOnline);
+    perbaruiOnline();
+
+    function batal() {
+      location.replace(TUJUAN);
+    }
+
+    function reset() {
+      if (navigator.onLine === false) { perbaruiOnline(); return; }
+      el('ya').disabled = true;
+      el('batal').disabled = true;
+      el('hasil').className = '';
+      el('hasil').textContent = 'Menghapus data lokal...';
+
+      var tugas = [];
+
+      try {
+        var hapus = [];
+        for (var i = 0; i < window.localStorage.length; i++) {
+          var k = window.localStorage.key(i);
+          if (k && k.indexOf('ddm_') === 0) hapus.push(k);
+        }
+        for (var j = 0; j < hapus.length; j++) window.localStorage.removeItem(hapus[j]);
+      } catch (e) {}
+
+      try {
+        if (window.caches && caches.keys) {
+          tugas.push(caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) {
+              return k.indexOf('ddm-') === 0 ? caches.delete(k) : null;
+            }));
+          }));
+        }
+      } catch (e) {}
+
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          tugas.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+      } catch (e) {}
+
+      Promise.all(tugas).then(selesai, selesai);
+    }
+
+    function selesai() {
+      el('hasil').className = 'ok';
+      el('hasil').textContent = 'SELESAI. Membuka Display dan mengambil data baru...';
+      setTimeout(function () { location.replace(TUJUAN); }, 1500);
+    }
+  </script>
+</body>
+</html>
