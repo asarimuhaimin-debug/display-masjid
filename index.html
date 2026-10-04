@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B5D3B">
+  <title>Display Masjid</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Display Masjid - Version 1.9.0 (Fase 10: Offline / PWA, halaman mandiri) */
+    /* 1u = 1% dari lebar panggung 16:9. Semua ukuran memakai u agar sama di semua resolusi TV. */
+    :root {
+      --u: min(1vw, 1.7778vh);
+      --main: #0B5D3B;
+      --accent: #D4AF37;
+      --bg1: #06281a;
+      --bg2: #0B5D3B;
+      --text: #FFFFFF;
+      --panel: rgba(255, 255, 255, 0.07);
+      --panel-line: rgba(212, 175, 55, 0.45);
+      --font: 'Poppins', 'Segoe UI', Roboto, Arial, sans-serif;
+      --jam-size: 6.8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: var(--font);
+      color: var(--text);
+    }
+
+    .stage {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: calc(var(--u) * 100);
+      height: calc(var(--u) * 56.25);
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse at 30% 0%, var(--bg2) 0%, var(--bg1) 75%);
+      overflow: hidden;
+    }
+
+    /* ---------- HEADER ---------- */
+    .header {
+      position: absolute;
+      left: 0; top: 0; right: 0;
+      height: calc(var(--u) * 8.5);
+      padding: 0 calc(var(--u) * 2.5);
+      display: flex;
+      align-items: center;
+      border-bottom: calc(var(--u) * 0.15) solid var(--panel-line);
+    }
+    .logo {
+      width: calc(var(--u) * 5.6);
+      height: calc(var(--u) * 5.6);
+      border-radius: 50%;
+      border: calc(var(--u) * 0.2) solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(0, 0, 0, 0.18);
+    }
+    .logo svg { width: 65%; height: 65%; fill: var(--accent); }
+    .title-wrap { margin-left: calc(var(--u) * 1.6); min-width: 0; flex: 1; }
+    .nama {
+      font-size: calc(var(--u) * 3.1);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .alamat {
+      font-size: calc(var(--u) * 1.35);
+      opacity: 0.8;
+      margin-top: calc(var(--u) * 0.35);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status {
+      text-align: right;
+      flex-shrink: 0;
+      margin-left: calc(var(--u) * 2);
+    }
+    .status .dot-line {
+      font-size: calc(var(--u) * 1.4);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .status .sync-line {
+      font-size: calc(var(--u) * 1.05);
+      opacity: 0.75;
+      margin-top: calc(var(--u) * 0.2);
+    }
+    .on { color: #7CFFB2; }
+    .off { color: #FFB86B; }
+
+    /* ---------- AREA UTAMA ---------- */
+    .main {
+      position: absolute;
+      left: calc(var(--u) * 2.5);
+      right: calc(var(--u) * 2.5);
+      top: calc(var(--u) * 10.5);
+      bottom: calc(var(--u) * 6.2);
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      grid-template-rows: 0.85fr 0.48fr 0.95fr;
+      gap: calc(var(--u) * 1.6);
+    }
+    .panel {
+      background: var(--panel);
+      border: calc(var(--u) * 0.12) solid var(--panel-line);
+      border-radius: calc(var(--u) * 1.2);
+      padding: calc(var(--u) * 1.6);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .panel.jam { grid-column: 1; grid-row: 1; align-items: center; text-align: center; padding: calc(var(--u) * 0.6); }
+    .panel.countdown { grid-column: 1; grid-row: 2; align-items: center; text-align: center; padding: calc(var(--u) * 0.6); }
+    .panel.khutbah { grid-column: 1; grid-row: 3; padding: calc(var(--u) * 1) calc(var(--u) * 1.6); }
+    .panel.sholat { grid-column: 2; grid-row: 1 / span 3; justify-content: flex-start; }
+    .panel h2 {
+      font-size: calc(var(--u) * 1.7);
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      margin-bottom: calc(var(--u) * 0.8);
+    }
+
+    /* ---------- JAM DIGITAL ---------- */
+    .clock {
+      font-size: calc(var(--u) * var(--jam-size));
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      color: var(--text);
+    }
+    .tgl-masehi {
+      margin-top: calc(var(--u) * 0.5);
+      font-size: calc(var(--u) * 2.3);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      line-height: 1.15;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .tgl-hijriah {
+      margin-top: calc(var(--u) * 0.3);
+      font-size: calc(var(--u) * 1.6);
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      line-height: 1.15;
+      opacity: 0.9;
+      white-space: nowrap;
+    }
+
+    /* ---------- COUNTDOWN ---------- */
+    .cd-label {
+      font-size: calc(var(--u) * 1.7);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .cd-time {
+      margin-top: calc(var(--u) * 0.2);
+      font-size: calc(var(--u) * 4.2);
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .panel.countdown.masuk {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #10231a;
+    }
+    .panel.countdown.masuk .cd-label { color: #10231a; }
+
+    /* ---------- PANEL BAWAH (KHUTBAH / PENGUMUMAN / KEGIATAN) ---------- */
+    .kh-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: calc(var(--u) * 1);
+      margin-bottom: calc(var(--u) * 0.8);
+    }
+    .kh-head h2 {
+      font-size: calc(var(--u) * 1.4);
+      margin: 0;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .kh-date {
+      font-size: calc(var(--u) * 1.3);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
+      min-width: 0;
+    }
+    .kh-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: calc(var(--u) * 0.8) calc(var(--u) * 1.2);
+    }
+    .kh-cell { min-width: 0; }
+    .kh-cell.kh-tema { grid-column: 1 / -1; }
+    .kh-lbl {
+      font-size: calc(var(--u) * 1);
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      line-height: 1.2;
+    }
+    .kh-val {
+      font-size: calc(var(--u) * 1.6);
+      font-weight: 600;
+      line-height: 1.15;
+      word-break: break-word;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .kh-cell.kh-tema .kh-val { font-size: calc(var(--u) * 1.7); }
+
+    .pg-judul {
+      font-size: calc(var(--u) * 2.2);
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: calc(var(--u) * 0.4);
+    }
+    .pg-isi {
+      font-size: calc(var(--u) * 1.7);
+      font-weight: 400;
+      line-height: 1.3;
+      word-break: break-word;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }
+
+    .kg-row {
+      display: flex;
+      align-items: baseline;
+      gap: calc(var(--u) * 1.2);
+      padding: calc(var(--u) * 0.3) 0;
+      border-bottom: calc(var(--u) * 0.08) solid var(--panel-line);
+      min-width: 0;
+    }
+    .kg-row:last-child { border-bottom: 0; }
+    .kg-tgl {
+      flex-shrink: 0;
+      width: calc(var(--u) * 11);
+      font-size: calc(var(--u) * 1.3);
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .kg-isi {
+      flex: 1;
+      min-width: 0;
+      font-size: calc(var(--u) * 1.6);
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kg-isi small {
+      font-size: calc(var(--u) * 1.2);
+      font-weight: 400;
+      opacity: 0.8;
+    }
+
+    /* ---------- JADWAL SHOLAT ---------- */
+    .jadwal-list {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      gap: calc(var(--u) * 0.55);
+    }
+    .srow {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 calc(var(--u) * 1.8);
+      border-radius: calc(var(--u) * 0.9);
+      border: calc(var(--u) * 0.1) solid transparent;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .srow .sn {
+      font-size: calc(var(--u) * 2.2);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .srow .st {
+      font-size: calc(var(--u) * 3.4);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .srow.lewat { opacity: 0.45; }
+    .srow.next {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #10231a;
+    }
+    .jadwal-note {
+      font-size: calc(var(--u) * 1.2);
+      color: #FFB86B;
+      text-align: center;
+      min-height: calc(var(--u) * 1.6);
+      margin-top: calc(var(--u) * 0.5);
+    }
+
+    /* ---------- TEKS BERJALAN ---------- */
+    .ticker {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: calc(var(--u) * 4.6);
+      background: rgba(0, 0, 0, 0.35);
+      border-top: calc(var(--u) * 0.15) solid var(--panel-line);
+      overflow: hidden;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+    }
+    .ticker span {
+      display: inline-block;
+      padding-left: 100%;
+      font-size: calc(var(--u) * 1.9);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      animation: geser 60s linear infinite;
+    }
+    @keyframes geser {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
+
+    /* ---------- PESAN KECIL (tidak pernah layar error besar) ---------- */
+    .notice {
+      position: absolute;
+      right: calc(var(--u) * 2.5);
+      bottom: calc(var(--u) * 5.2);
+      font-size: calc(var(--u) * 1.1);
+      padding: calc(var(--u) * 0.4) calc(var(--u) * 1);
+      border-radius: calc(var(--u) * 0.6);
+      background: rgba(0, 0, 0, 0.45);
+      color: #FFB86B;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="header">
+      <div class="logo" id="logo">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M32 4c1.6 3 3.4 4.6 3.4 7.2A3.4 3.4 0 0 1 32 14.6a3.4 3.4 0 0 1-3.4-3.4C28.6 8.6 30.4 7 32 4z"/>
+          <path d="M32 16c-9.5 0-17 7-17 15.5V36h34v-4.5C49 23 41.5 16 32 16z"/>
+          <rect x="12" y="37" width="40" height="4"/>
+          <rect x="14" y="42" width="36" height="16"/>
+          <rect x="6" y="22" width="5" height="36"/>
+          <rect x="53" y="22" width="5" height="36"/>
+          <path d="M8.5 12l3 8h-6z"/>
+          <path d="M55.5 12l3 8h-6z"/>
+        </svg>
+      </div>
+      <div class="title-wrap">
+        <div class="nama" id="nama">MASJID</div>
+        <div class="alamat" id="alamat"></div>
+      </div>
+      <div class="status">
+        <div class="dot-line off" id="statusLine">● MEMUAT</div>
+        <div class="sync-line" id="syncLine">Menunggu data...</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="panel jam">
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="tgl-masehi" id="tglMasehi">&nbsp;</div>
+        <div class="tgl-hijriah" id="tglHijriah">&nbsp;</div>
+      </div>
+      <div class="panel countdown" id="cdPanel">
+        <div class="cd-label" id="cdLabel">MENUJU WAKTU SHOLAT</div>
+        <div class="cd-time" id="cdTime">-- : -- : --</div>
+      </div>
+      <div class="panel sholat">
+        <h2>JADWAL SHOLAT</h2>
+        <div class="jadwal-list" id="jadwalList"></div>
+        <div class="jadwal-note" id="jadwalNote">&nbsp;</div>
+      </div>
+      <div class="panel khutbah">
+        <div class="kh-head">
+          <h2 id="panelJudul">JADWAL KHUTBAH JUMAT</h2>
+          <div class="kh-date" id="panelInfo">&nbsp;</div>
+        </div>
+        <div id="viewKh">
+          <div class="kh-grid">
+            <div class="kh-cell"><div class="kh-lbl">KHATIB</div><div class="kh-val" id="khKhatib">-</div></div>
+            <div class="kh-cell"><div class="kh-lbl">IMAM</div><div class="kh-val" id="khImam">-</div></div>
+            <div class="kh-cell"><div class="kh-lbl">MUADZIN</div><div class="kh-val" id="khMuadzin">-</div></div>
+            <div class="kh-cell kh-tema"><div class="kh-lbl">TEMA</div><div class="kh-val" id="khTema">-</div></div>
+          </div>
+        </div>
+        <div id="viewPg" style="display:none;">
+          <div class="pg-judul" id="pgJudul"></div>
+          <div class="pg-isi" id="pgIsi"></div>
+        </div>
+        <div id="viewKg" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="notice" id="notice"></div>
+
+    <div class="ticker"><span id="tickerText"></span></div>
+  </div>
+
+  <script>
+    (function () {
+      /* ====== PENGATURAN: alamat Web App Apps Script Anda (berakhiran /exec) ====== */
+      var URL_DATA = 'https://script.google.com/macros/s/AKfycbytjeXusZV5tb-T6AHqYh9fMhONA4jGEWAPY4NyKH_LnnDZOk1JfBDu5IERRzS74XjL/exec';
+      /* ========================================================================== */
+
+      var CACHE_KEY = 'ddm_display_cache_v1';
+      var REFRESH_MS = 5 * 60 * 1000;        // sinkron tiap 5 menit saat online
+      var RETRY_OFFLINE_MS = 60 * 1000;      // coba lagi tiap 1 menit saat offline
+      var FETCH_TIMEOUT_MS = 30000;
+      var RELOAD_MS = 6 * 60 * 60 * 1000;    // muat ulang halaman tiap 6 jam
+      var MASUK_MENIT = 10; // lama status "TELAH MASUK WAKTU ..." tampil
+      var MAX_PENGUMUMAN = 6;
+      var KEGIATAN_PER_HALAMAN = 4;
+      var MAX_HALAMAN_KEGIATAN = 3;
+      var BULAN = ['JANUARI','FEBRUARI','MARET','APRIL','MEI','JUNI','JULI','AGUSTUS','SEPTEMBER','OKTOBER','NOVEMBER','DESEMBER'];
+      var HARI = ['AHAD','SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU'];
+      var BULAN_HIJRI = ['MUHARRAM','SAFAR','RABIUL AWAL','RABIUL AKHIR','JUMADIL AWAL','JUMADIL AKHIR','RAJAB','SYABAN','RAMADHAN','SYAWAL','DZULQAIDAH','DZULHIJJAH'];
+      var OFFSET_ZONA = { WIB: 7, WITA: 8, WIT: 9 };
+      var UKURAN_JAM = { kecil: 5, sedang: 5.9, besar: 6.8 };
+
+      var JADWAL_ITEMS = [
+        ['imsak', 'IMSAK'],
+        ['subuh', 'SUBUH'],
+        ['syuruq', 'SYURUQ'],
+        ['dzuhur', 'DZUHUR'],
+        ['ashar', 'ASHAR'],
+        ['maghrib', 'MAGHRIB'],
+        ['isya', 'ISYA']
+      ];
+      var SHOLAT_WAJIB = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+      var NAMA_SHOLAT = { subuh: 'SUBUH', dzuhur: 'DZUHUR', ashar: 'ASHAR', maghrib: 'MAGHRIB', isya: 'ISYA' };
+
+      var state = { data: null, online: true, fetching: false, lastGoodAt: '' };
+      var jamState = { lastDayKey: '', lastClock: '', lastJadwalKey: '', lastCdLabel: '', lastCdTime: '', lastCdMasuk: null, timer: null };
+      var slideState = { idx: 0, timer: null, lastKgSig: '', lastView: '' };
+      var khHead = { judul: 'JADWAL KHUTBAH JUMAT', info: '' };
+      var fetchTimer = null;
+
+      function $(id) { return document.getElementById(id); }
+
+      function setText(id, teks) {
+        var el = $(id);
+        if (el && el.textContent !== teks) el.textContent = teks;
+      }
+
+      /* ---------- penyimpanan lokal (aman jika diblokir) ---------- */
+      function simpanLokal(data) {
+        try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (e) {}
+      }
+      function bacaLokal() {
+        try {
+          var s = window.localStorage.getItem(CACHE_KEY);
+          return s ? JSON.parse(s) : null;
+        } catch (e) { return null; }
+      }
+
+      /* ---------- warna ---------- */
+      function hexOk(h) { return /^#[0-9A-Fa-f]{6}$/.test(String(h || '')); }
+      function geser(hex, f) {
+        var r = parseInt(hex.substr(1, 2), 16);
+        var g = parseInt(hex.substr(3, 2), 16);
+        var b = parseInt(hex.substr(5, 2), 16);
+        r = Math.max(0, Math.min(255, Math.round(r * f)));
+        g = Math.max(0, Math.min(255, Math.round(g * f)));
+        b = Math.max(0, Math.min(255, Math.round(b * f)));
+        return '#' + ('0' + r.toString(16)).slice(-2) + ('0' + g.toString(16)).slice(-2) + ('0' + b.toString(16)).slice(-2);
+      }
+
+      function terapkanTema(cfg) {
+        var root = document.documentElement.style;
+        var main = hexOk(cfg.warna_utama) ? cfg.warna_utama : '#0B5D3B';
+        var accent = hexOk(cfg.warna_sekunder) ? cfg.warna_sekunder : '#D4AF37';
+        root.setProperty('--main', main);
+        root.setProperty('--accent', accent);
+
+        if (cfg.mode_tema === 'terang') {
+          root.setProperty('--bg1', '#F3EEDD');
+          root.setProperty('--bg2', '#FFFFFF');
+          root.setProperty('--text', geser(main, 0.45));
+          root.setProperty('--panel', 'rgba(11, 93, 59, 0.08)');
+          root.setProperty('--panel-line', 'rgba(11, 93, 59, 0.45)');
+        } else {
+          root.setProperty('--bg1', geser(main, 0.4));
+          root.setProperty('--bg2', main);
+          root.setProperty('--text', '#FFFFFF');
+          root.setProperty('--panel', 'rgba(255, 255, 255, 0.07)');
+          root.setProperty('--panel-line', 'rgba(212, 175, 55, 0.45)');
+        }
+
+        var font = String(cfg.font || '').replace(/[^A-Za-z0-9 \-]/g, '');
+        if (font) {
+          root.setProperty('--font', "'" + font + "', 'Poppins', 'Segoe UI', Roboto, Arial, sans-serif");
+        }
+
+        var ukuran = UKURAN_JAM[String(cfg.ukuran_jam || 'besar')] || UKURAN_JAM.besar;
+        root.setProperty('--jam-size', String(ukuran));
+      }
+
+      /* ---------- JAM, TANGGAL MASEHI, TANGGAL HIJRIAH ---------- */
+      function pad2(n) { return ('0' + n).slice(-2); }
+
+      function zonaKode() {
+        var cfg = state.data && state.data.config ? state.data.config : null;
+        var z = cfg && cfg.timezone ? String(cfg.timezone).toUpperCase() : 'WIB';
+        return OFFSET_ZONA[z] ? z : 'WIB';
+      }
+
+      function nowZone() {
+        return new Date(Date.now() + OFFSET_ZONA[zonaKode()] * 3600000);
+      }
+
+      function koreksiHijriah() {
+        var cfg = state.data && state.data.config ? state.data.config : null;
+        var n = cfg ? parseInt(cfg.koreksi_hijriah, 10) : 0;
+        if (isNaN(n)) n = 0;
+        return Math.max(-5, Math.min(5, n));
+      }
+
+      /** Perhitungan kalender Hijriah tabular (cadangan jika browser tidak mendukung Intl). */
+      function hijriahManual(y, m, d) {
+        var a = Math.floor((14 - m) / 12);
+        var yy = y + 4800 - a;
+        var mm = m + 12 * a - 3;
+        var jd = d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045;
+        var l = jd - 1948440 + 10632;
+        var n = Math.floor((l - 1) / 10631);
+        l = l - 10631 * n + 354;
+        var j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238));
+        l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29;
+        var bulan = Math.floor((24 * l) / 709);
+        var hari = l - Math.floor((709 * bulan) / 24);
+        var tahun = 30 * n + j - 30;
+        return { d: hari, m: bulan, y: tahun };
+      }
+
+      var fmtHijri = null;
+      var fmtHijriCoba = false;
+      function hijriahIntl(dt) {
+        if (!fmtHijriCoba) {
+          fmtHijriCoba = true;
+          try {
+            fmtHijri = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+              day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'UTC'
+            });
+          } catch (e) { fmtHijri = null; }
+        }
+        if (!fmtHijri) return null;
+        try {
+          var parts = fmtHijri.formatToParts(dt);
+          var out = {};
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i].type === 'day') out.d = parseInt(parts[i].value, 10);
+            if (parts[i].type === 'month') out.m = parseInt(parts[i].value, 10);
+            if (parts[i].type === 'year') out.y = parseInt(parts[i].value, 10);
+          }
+          if (out.d >= 1 && out.d <= 30 && out.m >= 1 && out.m <= 12 && out.y >= 1300 && out.y <= 1700) return out;
+        } catch (e) {}
+        return null;
+      }
+
+      function hitungHijriah(y, m, d, koreksi) {
+        // Tengah hari UTC agar aman dari pergeseran jam
+        var dt = new Date(Date.UTC(y, m - 1, d + koreksi, 12, 0, 0));
+        var h = hijriahIntl(dt);
+        if (!h) h = hijriahManual(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+        return h;
+      }
+
+      function gambarTanggal(d) {
+        var y = d.getUTCFullYear();
+        var m = d.getUTCMonth() + 1;
+        var tgl = d.getUTCDate();
+        var hari = HARI[d.getUTCDay()];
+
+        $('tglMasehi').textContent = hari + ', ' + pad2(tgl) + ' ' + BULAN[m - 1] + ' ' + y;
+
+        var teksHijri = '';
+        try {
+          var h = hitungHijriah(y, m, tgl, koreksiHijriah());
+          teksHijri = h.d + ' ' + BULAN_HIJRI[h.m - 1] + ' ' + h.y + ' H';
+        } catch (e) {
+          teksHijri = '';
+        }
+        $('tglHijriah').textContent = (teksHijri ? teksHijri + ' • ' : '') + zonaKode();
+      }
+
+      /* ---------- JADWAL SHOLAT ---------- */
+      function buatBarisJadwal() {
+        var list = $('jadwalList');
+        list.innerHTML = '';
+        for (var i = 0; i < JADWAL_ITEMS.length; i++) {
+          var row = document.createElement('div');
+          row.className = 'srow';
+          row.id = 'row_' + JADWAL_ITEMS[i][0];
+          var n = document.createElement('span');
+          n.className = 'sn';
+          n.textContent = JADWAL_ITEMS[i][1];
+          var t = document.createElement('span');
+          t.className = 'st';
+          t.id = 'time_' + JADWAL_ITEMS[i][0];
+          t.textContent = '--:--';
+          row.appendChild(n);
+          row.appendChild(t);
+          list.appendChild(row);
+        }
+      }
+
+      function ymd(d) {
+        return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+      }
+
+      function cariJadwal(kunciTanggal) {
+        var list = state.data && state.data.jadwal ? state.data.jadwal : [];
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].tanggal === kunciTanggal) return list[i];
+        }
+        return null;
+      }
+
+      function jamKeDetik(s) {
+        var m = String(s || '').match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return null;
+        return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60;
+      }
+
+      /**
+       * Menentukan status sholat saat ini.
+       * Hasil: null (jadwal belum ada / tidak lengkap) atau
+       *   { mode: 'masuk',  key, sec }  -> sec = detik sejak waktu masuk
+       *   { mode: 'menuju', key, sec }  -> sec = detik menuju waktu sholat
+       */
+      function hitungStatus(d) {
+        var j = cariJadwal(ymd(d));
+        if (!j) return null;
+        var nowSec = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+        var i, s;
+
+        // 1) baru saja masuk waktu sholat?
+        for (i = 0; i < SHOLAT_WAJIB.length; i++) {
+          s = jamKeDetik(j[SHOLAT_WAJIB[i]]);
+          if (s !== null && nowSec >= s && nowSec < s + MASUK_MENIT * 60) {
+            return { mode: 'masuk', key: SHOLAT_WAJIB[i], sec: nowSec - s };
+          }
+        }
+
+        // 2) sholat berikutnya hari ini
+        for (i = 0; i < SHOLAT_WAJIB.length; i++) {
+          s = jamKeDetik(j[SHOLAT_WAJIB[i]]);
+          if (s !== null && s > nowSec) {
+            return { mode: 'menuju', key: SHOLAT_WAJIB[i], sec: s - nowSec };
+          }
+        }
+
+        // 3) sudah lewat Isya -> Subuh besok
+        var besok = new Date(d.getTime() + 86400000);
+        var jb = cariJadwal(ymd(besok));
+        var sb = jamKeDetik((jb || j).subuh);
+        if (sb === null) return null;
+        return { mode: 'menuju', key: 'subuh', sec: 86400 - nowSec + sb };
+      }
+
+      function formatHMS(sec) {
+        if (sec < 0) sec = 0;
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = sec % 60;
+        return pad2(h) + ' : ' + pad2(m) + ' : ' + pad2(s);
+      }
+
+      function gambarCountdown(d) {
+        var st = hitungStatus(d);
+        var label, waktu, masuk;
+
+        if (!st) {
+          label = cariJadwal(ymd(d)) ? 'JADWAL BELUM LENGKAP' : 'JADWAL HARI INI BELUM DIISI';
+          waktu = '-- : -- : --';
+          masuk = false;
+        } else if (st.mode === 'masuk') {
+          label = 'TELAH MASUK WAKTU ' + NAMA_SHOLAT[st.key];
+          waktu = '+ ' + formatHMS(st.sec);
+          masuk = true;
+        } else {
+          label = 'MENUJU WAKTU ' + NAMA_SHOLAT[st.key];
+          waktu = formatHMS(st.sec);
+          masuk = false;
+        }
+
+        if (label !== jamState.lastCdLabel) {
+          $('cdLabel').textContent = label;
+          jamState.lastCdLabel = label;
+        }
+        if (waktu !== jamState.lastCdTime) {
+          $('cdTime').textContent = waktu;
+          jamState.lastCdTime = waktu;
+        }
+        if (masuk !== jamState.lastCdMasuk) {
+          $('cdPanel').className = masuk ? 'panel countdown masuk' : 'panel countdown';
+          jamState.lastCdMasuk = masuk;
+        }
+      }
+
+      function gambarJadwal(d) {
+        var j = cariJadwal(ymd(d));
+        var nowSec = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+        var st = hitungStatus(d);
+        var hlKey = st ? st.key : '';
+        var i, key, el;
+
+        // isi jam
+        for (i = 0; i < JADWAL_ITEMS.length; i++) {
+          key = JADWAL_ITEMS[i][0];
+          el = $('time_' + key);
+          el.textContent = j && j[key] ? j[key] : '--:--';
+        }
+
+        $('jadwalNote').innerHTML = j ? '&nbsp;' : 'Jadwal hari ini belum diisi';
+
+        // beri kelas: emas = sholat berikutnya / baru masuk, redup = sudah lewat
+        for (i = 0; i < JADWAL_ITEMS.length; i++) {
+          key = JADWAL_ITEMS[i][0];
+          var row = $('row_' + key);
+          var cls = 'srow';
+          var detik = j ? jamKeDetik(j[key]) : null;
+          if (key === hlKey) {
+            cls += ' next';
+          } else if (j && detik !== null && detik <= nowSec) {
+            cls += ' lewat';
+          }
+          row.className = cls;
+        }
+      }
+
+      /* ---------- KHUTBAH JUMAT ---------- */
+      function pilihKhutbah(today) {
+        var src = state.data && state.data.khutbah ? state.data.khutbah : [];
+        var list = [];
+        var i;
+        for (i = 0; i < src.length; i++) {
+          if (!src[i] || !src[i].tanggal) continue;
+          if (String(src[i].status || '').toLowerCase() === 'batal') continue;
+          list.push(src[i]);
+        }
+        list.sort(function (a, b) {
+          return a.tanggal < b.tanggal ? -1 : (a.tanggal > b.tanggal ? 1 : 0);
+        });
+        for (i = 0; i < list.length; i++) {
+          if (list[i].tanggal >= today) return { item: list[i], lewat: false };
+        }
+        if (list.length > 0) return { item: list[list.length - 1], lewat: true };
+        return null;
+      }
+
+      function teksTanggalKhutbah(tanggal) {
+        var m = String(tanggal || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return String(tanggal || '');
+        var dt = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 12, 0, 0));
+        return HARI[dt.getUTCDay()] + ', ' + m[3] + ' ' + (BULAN[parseInt(m[2], 10) - 1] || '') + ' ' + m[1];
+      }
+
+      function nilaiKh(v) {
+        var s = String(v === null || v === undefined ? '' : v).trim();
+        return s === '' ? '-' : s;
+      }
+
+      function gambarKhutbah(d) {
+        var pilih = pilihKhutbah(ymd(d));
+        if (!pilih) {
+          khHead.judul = 'JADWAL KHUTBAH JUMAT';
+          khHead.info = 'BELUM DIISI';
+          setText('khKhatib', '-');
+          setText('khImam', '-');
+          setText('khMuadzin', '-');
+          setText('khTema', '-');
+          return;
+        }
+        var k = pilih.item;
+        var tgl = teksTanggalKhutbah(k.tanggal);
+        var jam = String(k.jam || '').trim();
+        if (jam !== '') tgl += ' • ' + jam + ' ' + zonaKode();
+        khHead.judul = pilih.lewat ? 'KHUTBAH JUMAT TERAKHIR' : 'JADWAL KHUTBAH JUMAT';
+        khHead.info = tgl;
+        setText('khKhatib', nilaiKh(k.khatib));
+        setText('khImam', nilaiKh(k.imam));
+        setText('khMuadzin', nilaiKh(k.muadzin));
+        setText('khTema', nilaiKh(k.tema));
+      }
+
+      /* ---------- PENGUMUMAN & KEGIATAN (PANEL BERPUTAR) ---------- */
+      function daftarPengumuman(today) {
+        var src = state.data && state.data.pengumuman ? state.data.pengumuman : [];
+        var out = [];
+        for (var i = 0; i < src.length; i++) {
+          var r = src[i];
+          if (!r) continue;
+          if (r.aktif === false) continue;
+          if (r.tanggal_mulai && r.tanggal_mulai > today) continue;
+          if (r.tanggal_selesai && r.tanggal_selesai < today) continue;
+          if (!String(r.judul || '').trim() && !String(r.isi || '').trim()) continue;
+          out.push(r);
+          if (out.length >= MAX_PENGUMUMAN) break;
+        }
+        return out;
+      }
+
+      function daftarKegiatan(today) {
+        var src = state.data && state.data.kegiatan ? state.data.kegiatan : [];
+        var out = [];
+        for (var i = 0; i < src.length; i++) {
+          var r = src[i];
+          if (!r) continue;
+          if (r.aktif === false) continue;
+          if (r.tanggal && r.tanggal < today) continue;
+          if (!String(r.nama_kegiatan || '').trim()) continue;
+          out.push(r);
+        }
+        return out;
+      }
+
+      function bangunSlides(today) {
+        var slides = [{ t: 'kh' }];
+        var pg = daftarPengumuman(today);
+        var i;
+        for (i = 0; i < pg.length; i++) {
+          slides.push({ t: 'pg', item: pg[i], n: i + 1, total: pg.length });
+        }
+        var kg = daftarKegiatan(today);
+        var halaman = Math.min(MAX_HALAMAN_KEGIATAN, Math.ceil(kg.length / KEGIATAN_PER_HALAMAN));
+        for (i = 0; i < halaman; i++) {
+          slides.push({
+            t: 'kg',
+            items: kg.slice(i * KEGIATAN_PER_HALAMAN, (i + 1) * KEGIATAN_PER_HALAMAN),
+            n: i + 1,
+            total: halaman
+          });
+        }
+        return slides;
+      }
+
+      function labelTanggalKegiatan(r) {
+        var m = String(r.tanggal || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        var tgl = 'RUTIN';
+        if (m) tgl = m[3] + ' ' + (BULAN[parseInt(m[2], 10) - 1] || '').substr(0, 3);
+        var jam = String(r.waktu || '').trim();
+        return jam ? tgl + ' • ' + jam : tgl;
+      }
+
+      function gambarKegiatan(items) {
+        var sig = '';
+        var i;
+        for (i = 0; i < items.length; i++) {
+          sig += items[i].id + '|' + items[i].tanggal + '|' + items[i].waktu + '|' + items[i].nama_kegiatan + '|' + items[i].tempat + '##';
+        }
+        if (sig === slideState.lastKgSig) return;
+        slideState.lastKgSig = sig;
+
+        var box = $('viewKg');
+        box.innerHTML = '';
+        for (i = 0; i < items.length; i++) {
+          var r = items[i];
+          var row = document.createElement('div');
+          row.className = 'kg-row';
+          var tgl = document.createElement('div');
+          tgl.className = 'kg-tgl';
+          tgl.textContent = labelTanggalKegiatan(r);
+          var isi = document.createElement('div');
+          isi.className = 'kg-isi';
+          isi.appendChild(document.createTextNode(String(r.nama_kegiatan)));
+          var tempat = String(r.tempat || '').trim();
+          if (tempat) {
+            var sm = document.createElement('small');
+            sm.textContent = '  • ' + tempat;
+            isi.appendChild(sm);
+          }
+          row.appendChild(tgl);
+          row.appendChild(isi);
+          box.appendChild(row);
+        }
+      }
+
+      function tampilView(nama) {
+        if (slideState.lastView === nama) return;
+        slideState.lastView = nama;
+        $('viewKh').style.display = nama === 'kh' ? '' : 'none';
+        $('viewPg').style.display = nama === 'pg' ? '' : 'none';
+        $('viewKg').style.display = nama === 'kg' ? '' : 'none';
+      }
+
+      function gambarSlide(d) {
+        var slides = bangunSlides(ymd(d));
+        if (slideState.idx >= slides.length) slideState.idx = slideState.idx % slides.length;
+        var cur = slides[slideState.idx];
+
+        if (cur.t === 'pg') {
+          tampilView('pg');
+          setText('panelJudul', 'PENGUMUMAN');
+          setText('panelInfo', cur.total > 1 ? cur.n + ' / ' + cur.total : '');
+          var judul = String(cur.item.judul || '').trim();
+          var isi = String(cur.item.isi || '').trim();
+          setText('pgJudul', judul);
+          $('pgJudul').style.display = judul ? '' : 'none';
+          setText('pgIsi', isi);
+        } else if (cur.t === 'kg') {
+          tampilView('kg');
+          setText('panelJudul', 'KEGIATAN MASJID');
+          setText('panelInfo', cur.total > 1 ? cur.n + ' / ' + cur.total : '');
+          gambarKegiatan(cur.items);
+        } else {
+          tampilView('kh');
+          setText('panelJudul', khHead.judul);
+          setText('panelInfo', khHead.info);
+        }
+      }
+
+      function durasiSlide() {
+        var cfg = state.data && state.data.config ? state.data.config : null;
+        var n = cfg ? parseInt(cfg.durasi_slide, 10) : 15;
+        if (isNaN(n)) n = 15;
+        return Math.max(5, Math.min(300, n));
+      }
+
+      function jadwalkanSlide() {
+        if (slideState.timer) clearTimeout(slideState.timer);
+        slideState.timer = setTimeout(function () {
+          try {
+            slideState.idx++;
+            gambarSlide(nowZone());
+          } catch (e) {
+            // perputaran tidak boleh berhenti total
+          }
+          jadwalkanSlide();
+        }, durasiSlide() * 1000);
+      }
+
+      function tick() {
+        try {
+          var d = nowZone();
+          var teks = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+          if (teks !== jamState.lastClock) {
+            $('clock').textContent = teks;
+            jamState.lastClock = teks;
+          }
+          var kunci = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate() + '|' + zonaKode() + '|' + koreksiHijriah();
+          if (kunci !== jamState.lastDayKey) {
+            jamState.lastDayKey = kunci;
+            gambarTanggal(d);
+          }
+          var kunciJadwal = ymd(d) + '|' + pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + '|' + (state.data ? state.data.generatedAtMs : 0);
+          if (kunciJadwal !== jamState.lastJadwalKey) {
+            jamState.lastJadwalKey = kunciJadwal;
+            gambarJadwal(d);
+            gambarKhutbah(d);
+            gambarSlide(d);
+          }
+          gambarCountdown(d);
+        } catch (e) {
+          // jam tidak boleh berhenti total
+        }
+        var tunggu = 1000 - (Date.now() % 1000) + 15;
+        if (jamState.timer) clearTimeout(jamState.timer);
+        jamState.timer = setTimeout(tick, tunggu);
+      }
+
+      /* ---------- tampilan ---------- */
+      function formatStempel(s) {
+        // "2026-10-04 10:25:31" -> "04 OKTOBER 2026 • 10:25"
+        var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+        if (!m) return '-';
+        var bln = BULAN[parseInt(m[2], 10) - 1] || '';
+        return m[3] + ' ' + bln + ' ' + m[1] + ' • ' + m[4] + ':' + m[5];
+      }
+
+      function gambarStatus() {
+        var line = $('statusLine');
+        var sync = $('syncLine');
+        var stamp = state.data ? formatStempel(state.data.generatedAt) : '-';
+        if (state.online) {
+          line.className = 'dot-line on';
+          line.textContent = '● ONLINE';
+          sync.textContent = state.data ? 'Terakhir diperbarui: ' + stamp : 'Menunggu data...';
+        } else {
+          line.className = 'dot-line off';
+          line.textContent = '● OFFLINE';
+          sync.textContent = state.data ? 'Offline • Data terakhir: ' + stamp : 'Offline • Belum ada data tersimpan';
+        }
+      }
+
+      function aturTicker(teks) {
+        var el = $('tickerText');
+        var t = String(teks || '').trim();
+        if (t === '') t = ' ';
+        var isi = t + '   ' + t;
+        if (el.textContent === isi) return; // jangan ulang animasi jika teks sama
+        el.textContent = isi;
+        var detik = Math.max(30, Math.round(t.length * 0.45));
+        el.style.animationDuration = detik + 's';
+      }
+
+      function gambarData() {
+        var d = state.data;
+        if (!d || !d.config) return;
+        var cfg = d.config;
+        terapkanTema(cfg);
+        $('nama').textContent = cfg.nama_masjid || 'MASJID';
+        $('alamat').textContent = cfg.alamat || '';
+        document.title = cfg.nama_masjid || 'Display Masjid';
+        aturTicker(cfg.running_text);
+        // paksa tanggal, jadwal, khutbah, dan panel bawah dihitung ulang jika data berubah
+        jamState.lastDayKey = '';
+        jamState.lastJadwalKey = '';
+        slideState.lastKgSig = '';
+        tick();
+      }
+
+      function tampilkanNotice(teks) {
+        var n = $('notice');
+        if (!teks) { n.style.display = 'none'; return; }
+        n.textContent = teks;
+        n.style.display = 'block';
+      }
+
+      function render() {
+        try {
+          gambarData();
+          gambarStatus();
+        } catch (e) {
+          tampilkanNotice('Mode aman: tampilan dipulihkan');
+        }
+      }
+
+      /* ---------- pengambilan data (fetch ke Apps Script) ---------- */
+      function jadwalkanAmbil() {
+        if (fetchTimer) clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(ambilData, state.online ? REFRESH_MS : RETRY_OFFLINE_MS);
+      }
+
+      function selesaiAmbil(ok, res) {
+        state.fetching = false;
+        if (ok) {
+          state.data = res;
+          state.online = true;
+          simpanLokal(res);
+          tampilkanNotice('');
+        } else {
+          state.online = false;
+          tampilkanNotice('Mode Offline • Menggunakan data terakhir yang tersimpan');
+        }
+        render();
+        jadwalkanAmbil();
+      }
+
+      function ambilData() {
+        if (state.fetching) return;
+        if (!URL_DATA || URL_DATA.indexOf('http') !== 0) {
+          state.online = false;
+          tampilkanNotice('Alamat data belum diisi di index.html');
+          render();
+          return;
+        }
+        state.fetching = true;
+        var selesai = false;
+        var ctrl = null;
+        try { ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null; } catch (e) { ctrl = null; }
+
+        var timer = setTimeout(function () {
+          if (selesai) return;
+          selesai = true;
+          if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+          selesaiAmbil(false, null);
+        }, FETCH_TIMEOUT_MS);
+
+        try {
+          var url = URL_DATA + (URL_DATA.indexOf('?') >= 0 ? '&' : '?') + 'page=data&t=' + Date.now();
+          var opsi = { method: 'GET', cache: 'no-store', credentials: 'omit' };
+          if (ctrl) opsi.signal = ctrl.signal;
+          fetch(url, opsi)
+            .then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function (res) {
+              if (selesai) return;
+              selesai = true;
+              clearTimeout(timer);
+              if (res && res.ok && res.config) selesaiAmbil(true, res);
+              else selesaiAmbil(false, null);
+            })
+            .catch(function () {
+              if (selesai) return;
+              selesai = true;
+              clearTimeout(timer);
+              selesaiAmbil(false, null);
+            });
+        } catch (e) {
+          if (!selesai) {
+            selesai = true;
+            clearTimeout(timer);
+            selesaiAmbil(false, null);
+          }
+        }
+      }
+
+      /* ---------- service worker & muat ulang berkala ---------- */
+      function daftarkanSW() {
+        try {
+          if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+            navigator.serviceWorker.register('sw.js').catch(function () {});
+          }
+        } catch (e) {}
+      }
+
+      function jadwalkanReload() {
+        setTimeout(function cek() {
+          try {
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+              location.reload();
+              return;
+            }
+          } catch (e) {}
+          setTimeout(cek, RELOAD_MS);
+        }, RELOAD_MS);
+      }
+
+      /* ---------- mulai ---------- */
+      window.addEventListener('error', function () {
+        tampilkanNotice('Mode aman: terjadi gangguan kecil');
+      });
+      window.addEventListener('online', function () { ambilData(); });
+      window.addEventListener('offline', function () {
+        state.online = false;
+        render();
+      });
+
+      buatBarisJadwal();
+      var lokal = bacaLokal();
+      if (lokal && lokal.ok) {
+        state.data = lokal;
+        state.online = navigator.onLine !== false;
+      }
+      tick();
+      render();
+      jadwalkanSlide();
+      ambilData();
+      daftarkanSW();
+      jadwalkanReload();
+    })();
+  </script>
+</body>
+</html>
