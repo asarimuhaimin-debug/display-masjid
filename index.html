@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Display Masjid - Version 1.9.0 (Fase 10: Offline / PWA, halaman mandiri) */
-    /* 1u = 1% dari lebar panggung 16:9. Semua ukuran memakai u agar sama di semua resolusi TV. */
+    /* Display Masjid - Version 1.11.0 (Fase 12: Optimasi TV) */
+    /* 1u = 1% dari lebar panggung 16:9. Nilai --u dihitung ulang oleh JavaScript (px) agar aman di TV lama. */
     :root {
       --u: min(1vw, 1.7778vh);
       --main: #0B5D3B;
@@ -35,6 +35,7 @@
       font-family: var(--font);
       color: var(--text);
     }
+    body.sembunyi-kursor, body.sembunyi-kursor * { cursor: none; }
 
     .stage {
       position: absolute;
@@ -46,6 +47,9 @@
       background: radial-gradient(ellipse at 30% 0%, var(--bg2) 0%, var(--bg1) 75%);
       overflow: hidden;
     }
+    /* Mode ringan: latar satu warna rata, tanpa gradasi */
+    body.ringan .stage { background: var(--bg1); }
+    body.ringan .ticker span { animation-timing-function: steps(300, end); }
 
     /* ---------- HEADER ---------- */
     .header {
@@ -67,8 +71,10 @@
       justify-content: center;
       flex-shrink: 0;
       background: rgba(0, 0, 0, 0.18);
+      overflow: hidden;
     }
     .logo svg { width: 65%; height: 65%; fill: var(--accent); }
+    .logo img { width: 82%; height: 82%; object-fit: contain; display: none; }
     .title-wrap { margin-left: calc(var(--u) * 1.6); min-width: 0; flex: 1; }
     .nama {
       font-size: calc(var(--u) * 3.1);
@@ -363,6 +369,7 @@
       font-weight: 600;
       letter-spacing: 0.05em;
       animation: geser 60s linear infinite;
+      will-change: transform;
     }
     @keyframes geser {
       from { transform: translateX(0); }
@@ -381,12 +388,29 @@
       color: #FFB86B;
       display: none;
     }
+
+    /* ---------- ALAT UJI TV (?info=1) ---------- */
+    #infoBox {
+      position: fixed;
+      left: 8px;
+      bottom: 8px;
+      z-index: 99;
+      max-width: 90vw;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #7CFFB2;
+      font: 12px/1.5 monospace;
+      white-space: pre-wrap;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div class="stage" id="stage">
     <div class="header">
       <div class="logo" id="logo">
+        <img id="logoImg" alt="">
         <svg viewBox="0 0 64 64" aria-hidden="true">
           <path d="M32 4c1.6 3 3.4 4.6 3.4 7.2A3.4 3.4 0 0 1 32 14.6a3.4 3.4 0 0 1-3.4-3.4C28.6 8.6 30.4 7 32 4z"/>
           <path d="M32 16c-9.5 0-17 7-17 15.5V36h34v-4.5C49 23 41.5 16 32 16z"/>
@@ -449,6 +473,8 @@
     <div class="ticker"><span id="tickerText"></span></div>
   </div>
 
+  <div id="infoBox"></div>
+
   <script>
     (function () {
       /* ====== PENGATURAN: alamat Web App Apps Script Anda (berakhiran /exec) ====== */
@@ -482,11 +508,19 @@
       var SHOLAT_WAJIB = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
       var NAMA_SHOLAT = { subuh: 'SUBUH', dzuhur: 'DZUHUR', ashar: 'ASHAR', maghrib: 'MAGHRIB', isya: 'ISYA' };
 
+      var PARAM = String(location.search || '');
+      var PARAM_RINGAN = /[?&]ringan=1(&|$)/.test(PARAM);
+      var PARAM_INFO = /[?&]info=1(&|$)/.test(PARAM);
+
       var state = { data: null, online: true, fetching: false, lastGoodAt: '' };
-      var jamState = { lastDayKey: '', lastClock: '', lastJadwalKey: '', lastCdLabel: '', lastCdTime: '', lastCdMasuk: null, timer: null };
-      var slideState = { idx: 0, timer: null, lastKgSig: '', lastView: '' };
+      var jamState = { lastDayKey: '', lastClock: '', lastJadwalKey: '', lastCdLabel: '', lastCdTime: '', lastCdMasuk: null, timer: null, lastTickAt: Date.now() };
+      var slideState = { idx: 0, timer: null, lastKgSig: '', lastView: '', lastAt: Date.now() };
       var khHead = { judul: 'JADWAL KHUTBAH JUMAT', info: '' };
       var fetchTimer = null;
+      var logoState = '';
+      var wakeLock = null;
+      var kursorTimer = null;
+      var ukuranU = 0;
 
       function $(id) { return document.getElementById(id); }
 
@@ -504,6 +538,98 @@
           var s = window.localStorage.getItem(CACHE_KEY);
           return s ? JSON.parse(s) : null;
         } catch (e) { return null; }
+      }
+
+      /* ---------- OPTIMASI TV: ukuran, layar penuh, layar tidak mati ---------- */
+      /** Menghitung 1u dalam piksel. Aman untuk browser TV lama yang belum mendukung min() di CSS. */
+      function aturUkuran() {
+        try {
+          var w = window.innerWidth || document.documentElement.clientWidth || 0;
+          var h = window.innerHeight || document.documentElement.clientHeight || 0;
+          if (w < 1 || h < 1) return;
+          ukuranU = Math.min(w / 100, h / 56.25);
+          document.documentElement.style.setProperty('--u', ukuranU + 'px');
+        } catch (e) {}
+      }
+
+      function layarPenuh() {
+        try {
+          var d = document;
+          var e = d.documentElement;
+          var aktif = d.fullscreenElement || d.webkitFullscreenElement;
+          var p = null;
+          if (aktif) {
+            var keluar = d.exitFullscreen || d.webkitExitFullscreen;
+            if (keluar) p = keluar.call(d);
+          } else {
+            var masuk = e.requestFullscreen || e.webkitRequestFullscreen;
+            if (masuk) p = masuk.call(e);
+          }
+          if (p && p.catch) p.catch(function () {});
+        } catch (x) {}
+      }
+
+      function mintaWakeLock() {
+        try {
+          if (wakeLock) return;
+          if (document.hidden) return;
+          if (navigator.wakeLock && navigator.wakeLock.request) {
+            navigator.wakeLock.request('screen').then(function (l) {
+              wakeLock = l;
+              l.addEventListener('release', function () { wakeLock = null; });
+            }).catch(function () { wakeLock = null; });
+          }
+        } catch (e) {}
+      }
+
+      function sembunyiKursor() {
+        try { document.body.classList.add('sembunyi-kursor'); } catch (e) {}
+      }
+
+      function aturRingan(cfg) {
+        var aktif = PARAM_RINGAN || (cfg && String(cfg.mode_ringan).toLowerCase() === 'ya');
+        try {
+          if (aktif) document.body.classList.add('ringan');
+          else document.body.classList.remove('ringan');
+        } catch (e) {}
+        return aktif;
+      }
+
+      function adaRingan() {
+        try { return document.body.classList.contains('ringan'); } catch (e) { return false; }
+      }
+
+      function pasangLogo(uri) {
+        var img = $('logoImg');
+        var svg = $('logo').getElementsByTagName('svg')[0];
+        if (uri && /^data:image\/(png|jpeg);base64,/.test(uri)) {
+          img.onerror = function () {
+            img.style.display = 'none';
+            if (svg) svg.style.display = '';
+          };
+          img.src = uri;
+          img.style.display = 'block';
+          if (svg) svg.style.display = 'none';
+        } else {
+          img.removeAttribute('src');
+          img.style.display = 'none';
+          if (svg) svg.style.display = '';
+        }
+      }
+
+      function perbaruiInfo() {
+        var box = $('infoBox');
+        if (!box) return;
+        var sw = false;
+        try { sw = !!(navigator.serviceWorker && navigator.serviceWorker.controller); } catch (e) {}
+        var teks = 'Layar: ' + (window.innerWidth || 0) + ' x ' + (window.innerHeight || 0) +
+          ' (rasio piksel ' + (window.devicePixelRatio || 1) + ')\n' +
+          '1u = ' + (ukuranU ? ukuranU.toFixed(2) : '?') + ' px\n' +
+          'Layar tidak mati: ' + (wakeLock ? 'AKTIF' : (navigator.wakeLock ? 'belum aktif (tekan tombol apa saja)' : 'tidak didukung browser')) + '\n' +
+          'Mode ringan: ' + (adaRingan() ? 'YA' : 'tidak') + '\n' +
+          'Online: ' + (state.online ? 'ya' : 'tidak') + ' | Service Worker: ' + (sw ? 'aktif' : 'belum') + '\n' +
+          'Logo: ' + (logoState ? 'ada' : 'bawaan') + ' | Data: ' + (state.data ? state.data.generatedAt : 'belum ada');
+        if (box.textContent !== teks) box.textContent = teks;
       }
 
       /* ---------- warna ---------- */
@@ -975,6 +1101,7 @@
         slideState.timer = setTimeout(function () {
           try {
             slideState.idx++;
+            slideState.lastAt = Date.now();
             gambarSlide(nowZone());
           } catch (e) {
             // perputaran tidak boleh berhenti total
@@ -984,6 +1111,7 @@
       }
 
       function tick() {
+        jamState.lastTickAt = Date.now();
         try {
           var d = nowZone();
           var teks = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
@@ -1051,11 +1179,19 @@
         var d = state.data;
         if (!d || !d.config) return;
         var cfg = d.config;
+        aturRingan(cfg);
         terapkanTema(cfg);
         $('nama').textContent = cfg.nama_masjid || 'MASJID';
         $('alamat').textContent = cfg.alamat || '';
         document.title = cfg.nama_masjid || 'Display Masjid';
         aturTicker(cfg.running_text);
+
+        var logoUri = String(cfg.logo_data || '');
+        if (logoUri !== logoState) {
+          logoState = logoUri;
+          pasangLogo(logoUri);
+        }
+
         // paksa tanggal, jadwal, khutbah, dan panel bawah dihitung ulang jika data berubah
         jamState.lastDayKey = '';
         jamState.lastJadwalKey = '';
@@ -1172,6 +1308,19 @@
         }, RELOAD_MS);
       }
 
+      /* ---------- pengawas: menghidupkan kembali jam / perputaran yang macet ---------- */
+      function pengawas() {
+        try {
+          if (document.hidden) return;
+          if (Date.now() - jamState.lastTickAt > 20000) tick();
+          var batasSlide = durasiSlide() * 2000 + 5000;
+          if (Date.now() - slideState.lastAt > batasSlide) {
+            slideState.lastAt = Date.now();
+            jadwalkanSlide();
+          }
+        } catch (e) {}
+      }
+
       /* ---------- mulai ---------- */
       window.addEventListener('error', function () {
         tampilkanNotice('Mode aman: terjadi gangguan kecil');
@@ -1181,7 +1330,34 @@
         state.online = false;
         render();
       });
+      window.addEventListener('resize', aturUkuran);
+      window.addEventListener('orientationchange', aturUkuran);
 
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+          aturUkuran();
+          mintaWakeLock();
+          tick();
+          ambilData();
+        }
+      });
+
+      document.addEventListener('keydown', function (ev) {
+        var k = ev.key;
+        if (k === 'f' || k === 'F' || k === 'Enter') layarPenuh();
+        mintaWakeLock();
+      });
+      document.addEventListener('dblclick', function () { layarPenuh(); mintaWakeLock(); });
+      document.addEventListener('click', function () { mintaWakeLock(); });
+      document.addEventListener('mousemove', function () {
+        try { document.body.classList.remove('sembunyi-kursor'); } catch (e) {}
+        if (kursorTimer) clearTimeout(kursorTimer);
+        kursorTimer = setTimeout(sembunyiKursor, 3000);
+      });
+      kursorTimer = setTimeout(sembunyiKursor, 3000);
+
+      aturUkuran();
+      aturRingan(null);
       buatBarisJadwal();
       var lokal = bacaLokal();
       if (lokal && lokal.ok) {
@@ -1194,6 +1370,14 @@
       ambilData();
       daftarkanSW();
       jadwalkanReload();
+      mintaWakeLock();
+      setInterval(pengawas, 10000);
+
+      if (PARAM_INFO) {
+        $('infoBox').style.display = 'block';
+        perbaruiInfo();
+        setInterval(perbaruiInfo, 1000);
+      }
     })();
   </script>
 </body>
