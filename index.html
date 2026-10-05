@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Display Masjid - Version 1.11.0 (Fase 12: Optimasi TV) */
+    /* Display Masjid - Version 1.12.0 (Foto latar masjid) */
     /* 1u = 1% dari lebar panggung 16:9. Nilai --u dihitung ulang oleh JavaScript (px) agar aman di TV lama. */
     :root {
       --u: min(1vw, 1.7778vh);
@@ -50,6 +50,21 @@
     /* Mode ringan: latar satu warna rata, tanpa gradasi */
     body.ringan .stage { background: var(--bg1); }
     body.ringan .ticker span { animation-timing-function: steps(300, end); }
+
+    /* ---------- FOTO LATAR MASJID ---------- */
+    .bg-foto {
+      position: absolute;
+      left: 0; top: 0; right: 0; bottom: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      display: none;
+    }
+    .bg-gelap {
+      position: absolute;
+      left: 0; top: 0; right: 0; bottom: 0;
+      display: none;
+    }
 
     /* ---------- HEADER ---------- */
     .header {
@@ -408,6 +423,9 @@
 </head>
 <body>
   <div class="stage" id="stage">
+    <div class="bg-foto" id="bgFoto"></div>
+    <div class="bg-gelap" id="bgGelap"></div>
+
     <div class="header">
       <div class="logo" id="logo">
         <img id="logoImg" alt="">
@@ -482,9 +500,11 @@
       /* ========================================================================== */
 
       var CACHE_KEY = 'ddm_display_cache_v1';
+      var BG_KEY = 'ddm_bg_v1';
       var REFRESH_MS = 5 * 60 * 1000;        // sinkron tiap 5 menit saat online
       var RETRY_OFFLINE_MS = 60 * 1000;      // coba lagi tiap 1 menit saat offline
       var FETCH_TIMEOUT_MS = 30000;
+      var BG_TIMEOUT_MS = 60000;
       var RELOAD_MS = 6 * 60 * 60 * 1000;    // muat ulang halaman tiap 6 jam
       var MASUK_MENIT = 10; // lama status "TELAH MASUK WAKTU ..." tampil
       var MAX_PENGUMUMAN = 6;
@@ -516,6 +536,7 @@
       var jamState = { lastDayKey: '', lastClock: '', lastJadwalKey: '', lastCdLabel: '', lastCdTime: '', lastCdMasuk: null, timer: null, lastTickAt: Date.now() };
       var slideState = { idx: 0, timer: null, lastKgSig: '', lastView: '', lastAt: Date.now() };
       var khHead = { judul: 'JADWAL KHUTBAH JUMAT', info: '' };
+      var bgState = { ver: '', uri: '', fetching: false };
       var fetchTimer = null;
       var logoState = '';
       var wakeLock = null;
@@ -617,6 +638,120 @@
         }
       }
 
+      /* ---------- FOTO LATAR MASJID ---------- */
+      var BG_AWALAN = /^data:image\/jpeg;base64,/;
+
+      function simpanBg() {
+        try { window.localStorage.setItem(BG_KEY, JSON.stringify({ ver: bgState.ver, uri: bgState.uri })); } catch (e) {}
+      }
+      function hapusBgLokal() {
+        try { window.localStorage.removeItem(BG_KEY); } catch (e) {}
+      }
+      function bacaBg() {
+        try {
+          var s = window.localStorage.getItem(BG_KEY);
+          if (!s) return;
+          var o = JSON.parse(s);
+          if (o && typeof o.uri === 'string' && BG_AWALAN.test(o.uri)) {
+            bgState.ver = String(o.ver || '');
+            bgState.uri = o.uri;
+          }
+        } catch (e) {}
+      }
+
+      /** Menampilkan foto (jika ada dan mode ringan mati) dengan lapisan gelap sesuai pengaturan. */
+      function terapkanBg(cfg) {
+        var foto = $('bgFoto');
+        var gelap = $('bgGelap');
+        if (!bgState.uri || adaRingan()) {
+          foto.style.display = 'none';
+          gelap.style.display = 'none';
+          return;
+        }
+        if (foto.getAttribute('data-ver') !== bgState.ver) {
+          foto.style.backgroundImage = "url('" + bgState.uri + "')";
+          foto.setAttribute('data-ver', bgState.ver);
+        }
+        foto.style.display = 'block';
+
+        var ov = cfg ? parseInt(cfg.background_overlay, 10) : 55;
+        if (isNaN(ov)) ov = 55;
+        ov = Math.max(0, Math.min(90, ov));
+        var terang = cfg && cfg.mode_tema === 'terang';
+        gelap.style.background = (terang ? 'rgba(255, 255, 255, ' : 'rgba(4, 24, 15, ') + (ov / 100) + ')';
+        gelap.style.display = 'block';
+      }
+
+      function ambilBg() {
+        if (bgState.fetching || !state.online) return;
+        bgState.fetching = true;
+        var selesai = false;
+        var ctrl = null;
+        try { ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null; } catch (e) { ctrl = null; }
+
+        function akhir() {
+          bgState.fetching = false;
+          try { terapkanBg(state.data ? state.data.config : null); } catch (e) {}
+        }
+
+        var timer = setTimeout(function () {
+          if (selesai) return;
+          selesai = true;
+          if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+          akhir();
+        }, BG_TIMEOUT_MS);
+
+        try {
+          var url = URL_DATA + (URL_DATA.indexOf('?') >= 0 ? '&' : '?') + 'page=bg&t=' + Date.now();
+          var opsi = { method: 'GET', cache: 'no-store', credentials: 'omit' };
+          if (ctrl) opsi.signal = ctrl.signal;
+          fetch(url, opsi)
+            .then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function (res) {
+              if (selesai) return;
+              selesai = true;
+              clearTimeout(timer);
+              if (res && res.ok && typeof res.data === 'string' && BG_AWALAN.test(res.data)) {
+                bgState.uri = res.data;
+                bgState.ver = String(res.ver || '');
+                simpanBg();
+              }
+              akhir();
+            })
+            .catch(function () {
+              if (selesai) return;
+              selesai = true;
+              clearTimeout(timer);
+              akhir();
+            });
+        } catch (e) {
+          if (!selesai) {
+            selesai = true;
+            clearTimeout(timer);
+            akhir();
+          }
+        }
+      }
+
+      /** Mencocokkan foto di TV dengan versi di server. Foto hanya diunduh jika berganti. */
+      function sinkronBg(cfg) {
+        var ver = String(cfg.background_ver || '');
+        if (!ver) {
+          if (bgState.uri || bgState.ver) {
+            bgState.uri = '';
+            bgState.ver = '';
+            hapusBgLokal();
+          }
+          terapkanBg(cfg);
+          return;
+        }
+        terapkanBg(cfg);
+        if (ver !== bgState.ver) ambilBg();
+      }
+
       function perbaruiInfo() {
         var box = $('infoBox');
         if (!box) return;
@@ -628,7 +763,8 @@
           'Layar tidak mati: ' + (wakeLock ? 'AKTIF' : (navigator.wakeLock ? 'belum aktif (tekan tombol apa saja)' : 'tidak didukung browser')) + '\n' +
           'Mode ringan: ' + (adaRingan() ? 'YA' : 'tidak') + '\n' +
           'Online: ' + (state.online ? 'ya' : 'tidak') + ' | Service Worker: ' + (sw ? 'aktif' : 'belum') + '\n' +
-          'Logo: ' + (logoState ? 'ada' : 'bawaan') + ' | Data: ' + (state.data ? state.data.generatedAt : 'belum ada');
+          'Logo: ' + (logoState ? 'ada' : 'bawaan') + ' | Foto latar: ' + (bgState.uri ? (adaRingan() ? 'ada (disembunyikan, mode ringan)' : 'ada') : 'tidak ada') + '\n' +
+          'Data: ' + (state.data ? state.data.generatedAt : 'belum ada');
         if (box.textContent !== teks) box.textContent = teks;
       }
 
@@ -1192,6 +1328,8 @@
           pasangLogo(logoUri);
         }
 
+        sinkronBg(cfg);
+
         // paksa tanggal, jadwal, khutbah, dan panel bawah dihitung ulang jika data berubah
         jamState.lastDayKey = '';
         jamState.lastJadwalKey = '';
@@ -1359,6 +1497,7 @@
       aturUkuran();
       aturRingan(null);
       buatBarisJadwal();
+      bacaBg();
       var lokal = bacaLokal();
       if (lokal && lokal.ok) {
         state.data = lokal;
